@@ -28,12 +28,8 @@ interface LeaderboardData {
   items: UserData[]
 }
 
-// 🔑 Supabase env
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-// 🔗 Edge Function
-const API_URL = `${SUPABASE_URL}/functions/v1/smooth-service`
+// API URL при dev берём из окружения, по умолчанию localhost:3001
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/leaderboard'
 
 function getMessageCount(user: UserData, period: Period): number {
   if (period === "day") return user.day_count ?? 0
@@ -53,11 +49,7 @@ export function Leaderboard() {
       setError(null)
 
       try {
-        const res = await fetch(`${API_URL}?period=${period}`, {
-          headers: {
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          },
-        })
+        const res = await fetch(`${API_URL}?period=${period}`)
 
         if (!res.ok) {
           throw new Error(await res.text())
