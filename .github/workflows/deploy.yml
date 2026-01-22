@@ -27,7 +27,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
         timeout-minutes: 15
 
       - name: Build
@@ -66,7 +66,7 @@ jobs:
             # Обновление и деплой
             git fetch origin main
             git reset --hard origin/main
-            pnpm install --frozen-lockfile
+            pnpm install
             pnpm build
             
             # Запуск через PM2
