@@ -1,0 +1,108 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run linter
+        run: pnpm lint --max-warnings=0
+        continue-on-error: true
+
+      - name: Build project
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
+        continue-on-error: true
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            # Установка Node.js и pnpm если их нет
+            if ! command -v node &> /dev/null; then
+              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            fi
+            
+            if ! command -v pnpm &> /dev/null; then
+              npm install -g pnpm
+            fi
+            
+            if ! command -v pm2 &> /dev/null; then
+              npm install -g pm2
+            fi
+            
+            # Клонирование или обновление репозитория
+            if [ ! -d "${{ secrets.SERVER_DEPLOY_PATH }}" ]; then
+              git clone ${{ secrets.GITHUB_REPO }} ${{ secrets.SERVER_DEPLOY_PATH }}
+            fi
+            
+            cd ${{ secrets.SERVER_DEPLOY_PATH }}
+            
+            # Обновление и деплой
+            git fetch origin main
+            git reset --hard origin/main
+            pnpm install --frozen-lockfile
+            pnpm build
+            
+            # Запуск через PM2
+            pm2 restart app || pm2 start pnpm --name "app" -- start
+            pm2 save
+            pm2 startup
